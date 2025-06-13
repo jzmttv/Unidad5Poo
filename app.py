@@ -2,9 +2,12 @@ from flask import Flask, request, render_template
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime
 from models import database, trabajador, registrohorario
+from flask_sqlalchemy import SQLAlchemy
 
 
 app = Flask(__name__)
+app.config.from_pyfile('config.py')
+database.init_app(app)
 
 @app.route('/')
 def inicio():
@@ -20,30 +23,32 @@ def registrar_entrada():
         if not legajo or not dni:
             return render_template('error.html', error="Todos los campos son obligatorios")
 
-        # verificar que el trabajador exista
+  # Verificar que el trabajador exista
         trabajador_existente = trabajador.query.filter_by(legajo=legajo, dni=dni).first()
-        if not trabajador_existente:
-            return render_template('error.html', error="Trabajador no registrado")
 
-        # verificar si ya tiene una entrada hoy
-        ultima_entrada = registrohorario.query.filter_by(legajo=legajo).order_by(registrohorario.fecha_hora.desc()).first()
-        fecha_hoy = datetime.now().date()
-
-        if ultima_entrada and ultima_entrada.fecha_hora.date() == fecha_hoy:
-            return render_template('error.html', error="Ya se registró una entrada el día de hoy")
-
-        # registrar la nueva entrada
-        nueva_entrada = registrohorario(legajo=legajo, fecha_hora=datetime.now())
-        database.session.add(nueva_entrada)
-        database.session.commit()
-
-        return render_template('anuncio.html', anuncio="Nueva entrada registrada")
-
+        #Falta verificar que no se haya ingresado una entrada el mismo dia 
+        
+        if trabajador_existente:
+            # Crear registro de horario asociado al trabajador
+            nueva_entrada = registrohorario(
+                fecha=datetime.now().date(),
+                horaentrada=datetime.now(),
+                horasalida=None, 
+                dependencia="DO1",
+                idtrabajador=trabajador_existente.id
+            )
+            database.session.add(nueva_entrada)
+            database.session.commit()
+            return render_template('anuncio.html', anuncio="Nueva entrada registrada")
+        else:
+            return render_template('error.html', error="Trabajador no registrado en la base de datos")
     # GET - mostrar formulario
     return render_template('formulario.html')
 
 
 if __name__ == '__main__':
+    with app.app_context():
+        database.create_all()
     app.run(debug = True)
         
     
